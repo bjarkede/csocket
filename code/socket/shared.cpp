@@ -6,7 +6,13 @@ static unsigned int logicalThreadIndex;
 // TODO
 #if defined (_WIN32)
 DWORD WINAPI AcceptSocket(void* data) {
+  sockDownload_t* dl = (sockDownload_t*)data;
 
+  const int ec = recv(dl->socket, dl->recBuffer, sizeof(dl->recBuffer) - 1, 0);
+
+  printf("made it");
+  
+  free(data);
   return 0;
 }
 #else
@@ -55,7 +61,7 @@ Socket::~Socket() {
 
 bool Socket::SetSocketBlocking(SOCKET socket, bool blocking) {
 #if defined(_WIN32)
-  u_long option = blocking ? 0 : 1;
+  unsigned int option = blocking ? 0 : 1;
   return ioctlsocket(socket, FIONBIO, &option) != SOCKET_ERROR;
 #else
   const int flags = fcntl(socket, F_GETFL, 0);
@@ -131,21 +137,26 @@ void DownloadClear(sockDownload_t* dl) {
 bool Socket::AcceptNextConnection(fileDownload_t* dl) {
 
   SOCKET connSocket = INVALID_SOCKET;
+  static sockDownload_t sockdl;
   connSocket = accept(dl->socket, (struct sockaddr*)&connSocket, (socklen_t*)sizeof(connSocket));
   if(connSocket != SOCKET_ERROR) {
 #if defined (_WIN32)
+    HANDLE thread = CreateThread(NULL, 0, AcceptSocket, &sockdl, 0, NULL);
 
 #else
-    sockDownload_t dl; 
-    
-    if(pthread_create(&threads[logicalThreadIndex++], NULL, AcceptSocket, &connSocket)) {
+    if(pthread_create(&threads[logicalThreadIndex], NULL, AcceptSocket, &sockdl)) {
       // Error couldn't create thread.
       return false;
     }
 
+    if(pthread_join(threads[logicalThreadIndex++], NULL)) {
+      // Error couldn't join thread.
+      return false;
+    }
 #endif
   } else {
     // Error accepting connection.
+    printf("error accepting connection\n");
     return false;
   }
   
@@ -310,7 +321,7 @@ bool Socket::SendFileRequest(fileDownload_t* dl, fileDownloadSource_t& source) {
   char tempPath[MAX_PATH];
 
 #if defined(_WIN32)
-  if(GetModuleFileNameA(NULL, tempPath, sizeof(tempPath) == 0) {
+  if(GetModuleFileNameA(NULL, tempPath, sizeof(tempPath)) == 0) {
       // Error couldn't get current path (WIN32)
       return false;
   }

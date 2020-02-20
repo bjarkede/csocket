@@ -11,7 +11,7 @@
 #include <winsock2.h>
 #include <Windows.h>
 #include <ws2tcpip.h>
-#include <Processthreadapi.h>
+#include <Processthreadsapi.h>
 #else
 #include <pthread.h>
 #include <sys/types.h>
@@ -26,7 +26,7 @@
 #endif
 
 #if defined(_WIN32)
-typedef ADDRINOA addrInfo_t;
+typedef ADDRINFOA addrInfo_t;
 #define closesocket closesocket
 #define unlink _unlink
 #else

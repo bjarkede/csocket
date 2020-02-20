@@ -28,7 +28,9 @@ int main(int argc, char** argv) {
       //If connection occurs create a new thread so we can handle multiple client connetions.
     }
 
-    printf("made it.");
+    if(sock.AcceptNextConnection(&cl_fileDL)) {
+      printf("made it.");
+    }
   }
     
   return 0;
