@@ -11,7 +11,9 @@
 #include <winsock2.h>
 #include <Windows.h>
 #include <ws2tcpip.h>
+#include <Processthreadapi.h>
 #else
+#include <pthread.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -39,6 +41,7 @@ typedef int SOCKET;
 
 #define DEFAULT_PORT "27015"
 #define MAX_TIMEOUT_MS 2000
+#define NUM_THREADS 5
 
 #define s8 int8_t
 #define s16 int16_t
@@ -67,6 +70,14 @@ struct fileDownload_t {
   char query[512];
   sockaddr_in addresses[16];
   char tempPath[MAX_PATH];
+};
+
+struct sockDownload_t {
+  SOCKET socket;
+  FILE* file;
+  char recBuffer[1 << 20];
+  int bytesTotal;
+  int bytesDownloaded;
 };
 
 enum fileDownloadStatus_t {
@@ -120,6 +131,7 @@ struct Socket {
   bool ListenBegin(fileDownload_t* dl);
   bool SendFileRequest(fileDownload_t* dl, fileDownloadSource_t& source);
   bool DownloadBegin(fileDownload_t* dl, fileDownloadSource_t& source);
+  bool AcceptNextConnection(fileDownload_t* dl);
   connState_t OpenNextConnection(fileDownload_t* dl, fileDownloadSource_t& source);
 
   int GetSocketError();
@@ -134,3 +146,4 @@ bool DeallocBuffer(Buffer& buffer);
 bool ReadEntireFile(Buffer& buffer, const char* filePath);
 bool ShouldPrintHelp(int argc, char** argv);
 const char* GetExecutableFileName(char* argv0);
+void DownloadClear(sockDownload_t* dl);

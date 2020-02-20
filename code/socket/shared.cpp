@@ -1,5 +1,25 @@
 #include "shared.hpp"
 
+static pthread_t threads[NUM_THREADS];
+static unsigned int logicalThreadIndex;
+
+// TODO
+#if defined (_WIN32)
+DWORD WINAPI AcceptSocket(void* data) {
+
+  return 0;
+}
+#else
+void* AcceptSocket(void* data) {
+
+  sockDownload_t* dl = (sockDownload_t*)data;
+  
+  const int ec = recv(dl->socket, dl->recBuffer, sizeof(dl->recBuffer) - 1, 0);
+  
+  pthread_exit(NULL);
+}
+#endif
+
 File::File() : file_buffer(NULL) {};
 
 File::~File() {
@@ -97,6 +117,38 @@ bool Socket::Create(fileDownload_t* dl) {
   if(!SetSocketOption(dl, SO_SNDTIMEO, &timeout, sizeof(timeout)))
     return false;
 
+  return true;
+}
+
+void DownloadClear(sockDownload_t* dl) {
+  dl->socket = INVALID_SOCKET;
+  dl->file   = NULL;
+  dl->bytesTotal = 0;
+  dl->bytesDownloaded = 0;
+}
+
+//TODO
+bool Socket::AcceptNextConnection(fileDownload_t* dl) {
+
+  SOCKET connSocket = INVALID_SOCKET;
+  connSocket = accept(dl->socket, (struct sockaddr*)&connSocket, (socklen_t*)sizeof(connSocket));
+  if(connSocket != SOCKET_ERROR) {
+#if defined (_WIN32)
+
+#else
+    sockDownload_t dl; 
+    
+    if(pthread_create(&threads[logicalThreadIndex++], NULL, AcceptSocket, &connSocket)) {
+      // Error couldn't create thread.
+      return false;
+    }
+
+#endif
+  } else {
+    // Error accepting connection.
+    return false;
+  }
+  
   return true;
 }
 
