@@ -23,20 +23,16 @@ int main(int argc, char** argv) {
   
   Socket sock;
   if(sock.Create(&cl_fileDL)) {;
-
-    // Make it block while waiting for a request.
-    if(!sock.SetSocketBlocking(cl_fileDL.socket, false)) {
-      printf("Error in set to block\n");
-    }
     
     if(!sock.ListenBegin(&cl_fileDL)) {
       //@TODO:
       //If connection occurs create a new thread so we can handle multiple client connetions.
     }
 
-    
-    if(sock.AcceptNextConnection(&cl_fileDL)) {
-    
+    while(1) {
+      if(sock.AcceptNextConnection(&cl_fileDL)) {
+        
+      }
     }
 
   }

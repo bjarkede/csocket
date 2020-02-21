@@ -70,6 +70,8 @@ struct fileDownload_t {
   char query[512];
   sockaddr_in addresses[16];
   char tempPath[MAX_PATH];
+  sockaddr_in serv_addr;
+  sockaddr_in client_addr;
 };
 
 struct sockDownload_t {
@@ -78,7 +80,6 @@ struct sockDownload_t {
   char recBuffer[1 << 20];
   int bytesTotal;
   int bytesDownloaded;
-  sockaddr_in client_addr;
 };
 
 enum fileDownloadStatus_t {

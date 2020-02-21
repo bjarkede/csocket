@@ -9,8 +9,6 @@ DWORD WINAPI AcceptSocket(void* data) {
   sockDownload_t* dl = (sockDownload_t*)data;
 
   const int ec = recv(dl->socket, dl->recBuffer, sizeof(dl->recBuffer) - 1, 0);
-
-  printf("made it");
   
   free(data);
   return 0;
@@ -19,8 +17,18 @@ DWORD WINAPI AcceptSocket(void* data) {
 void* AcceptSocket(void* data) {
 
   sockDownload_t* dl = (sockDownload_t*)data;
+
+  Buffer buf;
+
+  while(1) {
+    if(recv(dl->socket, dl->recBuffer, sizeof(dl->recBuffer) - 1, 0) != SOCKET_ERROR) {
+      if(ReadEntireFile(buf, "/root/Documents/git/csocket/code/socket/hello.txt")) {
+	write(dl->socket, &buf, buf.length);
+      }
+    }
+  }
   
-  const int ec = recv(dl->socket, dl->recBuffer, sizeof(dl->recBuffer) - 1, 0);
+  closesocket(dl->socket);
   
   pthread_exit(NULL);
 }
@@ -61,14 +69,14 @@ Socket::~Socket() {
 
 bool Socket::SetSocketBlocking(SOCKET socket, bool blocking) {
 #if defined(_WIN32)
-  unsigned int option = blocking ? 0 : 1;
-  return ioctlsocket(socket, FIONBIO, &option) != SOCKET_ERROR;
+	unsigned long option = blocking ? 0 : 1;
+	return ioctlsocket(socket, FIONBIO, &option) != SOCKET_ERROR;
 #else
-  const int flags = fcntl(socket, F_GETFL, 0);
-  if(flags == -1)
-    return false;
-  const int newFlags = blocking ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK);
-  return fcntl(socket, F_SETFL, newFlags) != SOCKET_ERROR;
+	int flags = fcntl(socket, F_GETFL, 0);
+	if (flags == -1)
+		return false;
+	int newFlags = blocking ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK);
+	return fcntl(socket, F_SETFL, newFlags) != SOCKET_ERROR;
 #endif
 }
 
@@ -136,33 +144,31 @@ void DownloadClear(sockDownload_t* dl) {
 //TODO
 bool Socket::AcceptNextConnection(fileDownload_t* dl) {
 
-  if(!Create(dl))
-    return false;
+  int opts;
+  opts = fcntl(dl->socket, F_GETFL);
+  opts = opts & (~O_NONBLOCK);
 
   SOCKET connSocket = INVALID_SOCKET;
-  static sockDownload_t sockdl;
-  socklen_t clilen = (socklen_t)sizeof(sockdl.client_addr);
-  printf("%d\n", clilen);
-  connSocket = accept(dl->socket, (sockaddr*)&sockdl.client_addr, &clilen);
-  printf("%d %d\n", errno, connSocket);
+  sockDownload_t sockdl;
+  socklen_t clilen = sizeof(dl->client_addr);
+  connSocket = accept(dl->socket, (sockaddr*)&dl->client_addr, &clilen);
   if(connSocket != INVALID_SOCKET) {
 #if defined (_WIN32)
     HANDLE thread = CreateThread(NULL, 0, AcceptSocket, &sockdl, 0, NULL);
 
 #else
+    sockdl.socket = connSocket;
     if(pthread_create(&threads[logicalThreadIndex], NULL, AcceptSocket, &sockdl)) {
       // Error couldn't create thread.
       return false;
     }
 
-    if(pthread_join(threads[logicalThreadIndex++], NULL)) {
+    if(pthread_detach(threads[logicalThreadIndex++])) {
       // Error couldn't join thread.
       return false;
     }
 #endif
   } else {
-    // Error accepting connection.
-    printf("error accepting connection\n");
     return false;
   }
   
@@ -171,9 +177,6 @@ bool Socket::AcceptNextConnection(fileDownload_t* dl) {
 
 bool Socket::ListenBegin(fileDownload_t* dl) {
   
-  if(!Create(dl))
-    return false;
-
   addrInfo_t hints;
   memset(&hints, 0, sizeof(hints));
   hints.ai_family = AF_INET;
@@ -181,20 +184,37 @@ bool Socket::ListenBegin(fileDownload_t* dl) {
   hints.ai_protocol = IPPROTO_TCP;
   hints.ai_flags = AI_PASSIVE;
 
-  addrInfo_t* address;
+  addrInfo_t* addresses;
   
-  const int ec = getaddrinfo(NULL, DEFAULT_PORT, &hints, &address);
+  const int ec = getaddrinfo(NULL, DEFAULT_PORT, &hints, &addresses);
   if(ec == 0) {
     
-    if(bind(dl->socket, address->ai_addr, (socklen_t)address->ai_addrlen) == SOCKET_ERROR) {
+    addrInfo_t* a = addresses;
+
+    while(a != NULL) {
+      if(a->ai_family == AF_INET &&
+	 a->ai_socktype == SOCK_STREAM &&
+	 a->ai_protocol == IPPROTO_TCP) {
+	
+	sockaddr_in&  address = dl->serv_addr;
+	memset(&address, 0, sizeof(sockaddr_in));
+	dl->serv_addr.sin_family = AF_INET;
+	dl->serv_addr.sin_addr.s_addr = INADDR_ANY;
+	dl->serv_addr.sin_port = htons(27015);
+	//memcpy(&address, a->ai_addr, sizeof(*a->ai_addr));
+	
+	break;
+      }
+      a = a->ai_next;
+    }
+    
+    if(bind(dl->socket, (struct sockaddr *)&dl->serv_addr, sizeof(dl->serv_addr)) == SOCKET_ERROR) {
       // Binding failed
       printf("Binding failed with error: %d...\n", GetSocketError());
-      freeaddrinfo(address);
       return false;
     }
-
-    
-    freeaddrinfo(address);
+   
+    freeaddrinfo(addresses);
   } else {
     // Couldn't get addr info
     return false;
