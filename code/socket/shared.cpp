@@ -136,10 +136,16 @@ void DownloadClear(sockDownload_t* dl) {
 //TODO
 bool Socket::AcceptNextConnection(fileDownload_t* dl) {
 
+  if(!Create(dl))
+    return false;
+
   SOCKET connSocket = INVALID_SOCKET;
   static sockDownload_t sockdl;
-  connSocket = accept(dl->socket, (struct sockaddr*)&connSocket, (socklen_t*)sizeof(connSocket));
-  if(connSocket != SOCKET_ERROR) {
+  socklen_t clilen = (socklen_t)sizeof(sockdl.client_addr);
+  printf("%d\n", clilen);
+  connSocket = accept(dl->socket, (sockaddr*)&sockdl.client_addr, &clilen);
+  printf("%d %d\n", errno, connSocket);
+  if(connSocket != INVALID_SOCKET) {
 #if defined (_WIN32)
     HANDLE thread = CreateThread(NULL, 0, AcceptSocket, &sockdl, 0, NULL);
 
@@ -176,15 +182,18 @@ bool Socket::ListenBegin(fileDownload_t* dl) {
   hints.ai_flags = AI_PASSIVE;
 
   addrInfo_t* address;
+  
   const int ec = getaddrinfo(NULL, DEFAULT_PORT, &hints, &address);
   if(ec == 0) {
-    if(bind(dl->socket, address->ai_addr, (int)address->ai_addrlen) == SOCKET_ERROR) {
+    
+    if(bind(dl->socket, address->ai_addr, (socklen_t)address->ai_addrlen) == SOCKET_ERROR) {
       // Binding failed
       printf("Binding failed with error: %d...\n", GetSocketError());
       freeaddrinfo(address);
       return false;
     }
 
+    
     freeaddrinfo(address);
   } else {
     // Couldn't get addr info

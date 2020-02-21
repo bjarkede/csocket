@@ -78,6 +78,7 @@ struct sockDownload_t {
   char recBuffer[1 << 20];
   int bytesTotal;
   int bytesDownloaded;
+  sockaddr_in client_addr;
 };
 
 enum fileDownloadStatus_t {
