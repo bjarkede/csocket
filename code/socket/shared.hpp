@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <limits.h>
+#include <dirent.h>
 #if defined(_WIN32)
 #include <io.h>
 #endif
@@ -12,6 +13,7 @@
 #include <Windows.h>
 #include <ws2tcpip.h>
 #include <Processthreadsapi.h>
+
 #else
 #include <pthread.h>
 #include <sys/types.h>
@@ -68,6 +70,7 @@ struct fileDownload_t {
   char tempMessage2[MAXPRINTMSG]; // for PrintSocketError
   char errorMessage[MAXPRINTMSG];
   char fileName[MAX_PATH];
+  char recBuffer[1 << 20];
   int addressIndex;
   int addressCount;
   int startTimeMS;
@@ -77,18 +80,12 @@ struct fileDownload_t {
   bool exactMatch;
   bool realFileName;
   char query[512];
+  int bytesTotal;
+  int bytesDownloaded;
   sockaddr_in addresses[16];
   char tempPath[MAX_PATH];
   sockaddr_in serv_addr;
   sockaddr_in client_addr;
-};
-
-struct sockDownload_t {
-  SOCKET socket;
-  FILE* file;
-  char recBuffer[1 << 20];
-  int bytesTotal;
-  int bytesDownloaded;
 };
 
 enum fileDownloadStatus_t {
@@ -155,12 +152,13 @@ struct Socket {
   void PrintSocketError(fileDownload_t* dl, const char* functionName);
 };
 
+bool FindLocalFile(fileDownload_t* dl);
 bool AllocBuffer(Buffer& buffer, uptr bytes);
 bool DeallocBuffer(Buffer& buffer);
 bool ReadEntireFile(Buffer& buffer, const char* filePath);
 bool ShouldPrintHelp(int argc, char** argv);
 const char* GetExecutableFileName(char* argv0);
-void DownloadClear(sockDownload_t* dl);
+void DownloadClear(fileDownload_t* dl);
 
 void PrintError(fileDownload_t* dl, const char* fmt, ...);
 

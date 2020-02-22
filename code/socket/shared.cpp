@@ -14,36 +14,39 @@ DWORD WINAPI AcceptSocket(void* data) {
   return 0;
 }
 #else
-//TODO: Make it so the client sends the request for a file.
 void* AcceptSocket(void* data) {
 
-  sockDownload_t* dl = (sockDownload_t*)data;
+  fileDownload_t* dl = (fileDownload_t*)data;
 
   Buffer buf;
 
   while(1) {
     const int ec = recv(dl->socket, dl->recBuffer, sizeof(dl->recBuffer) - 1, 0);
     if(ec > 0) {
-      if(ReadEntireFile(buf, "/root/Documents/git/csocket/code/socket/hello.txt")) {
 
-	char buff[CHUNK_SIZE];
-	s32 offset = 0;
+      memcpy(dl->fileName, dl->recBuffer, strlen(dl->recBuffer) - 1);
+      
+      if(FindLocalFile(dl)) {
+	if(ReadEntireFile(buf, dl->tempPath)) {
+
+	  char buff[CHUNK_SIZE];
+	  s32 offset = 0;
 	
-	while(1) {
-	  if(offset >= buf.length) break;
-	  memcpy(buff, (uint8_t*)buf.buffer + offset, CHUNK_SIZE);
-	  write(dl->socket, &buff, CHUNK_SIZE);
+	  while(1) {
+	    if(offset >= buf.length) break;
+	    memcpy(buff, (uint8_t*)buf.buffer + offset, CHUNK_SIZE);
+	    write(dl->socket, &buff, CHUNK_SIZE);
 
-	  offset += CHUNK_SIZE;
+	    offset += CHUNK_SIZE;
+	  }
 	}
-      }
+      } 
     } else {
       //PrintError(dl, "recv", ec);
     }
   }
-  
+
   closesocket(dl->socket);
-  
   pthread_exit(NULL);
 }
 #endif
@@ -148,7 +151,7 @@ bool Socket::Create(fileDownload_t* dl) {
   return true;
 }
 
-void DownloadClear(sockDownload_t* dl) {
+void DownloadClear(fileDownload_t* dl) {
   dl->socket = INVALID_SOCKET;
   dl->file   = NULL;
   dl->bytesTotal = 0;
@@ -159,16 +162,16 @@ void DownloadClear(sockDownload_t* dl) {
 bool Socket::AcceptNextConnection(fileDownload_t* dl) {
 
   SOCKET connSocket = INVALID_SOCKET;
-  sockDownload_t sockdl;
+  fileDownload_t clientdl;
   socklen_t clilen = sizeof(dl->client_addr);
   connSocket = accept(dl->socket, (sockaddr*)&dl->client_addr, &clilen);
   if(connSocket != INVALID_SOCKET) {
 #if defined (_WIN32)
-    HANDLE thread = CreateThread(NULL, 0, AcceptSocket, &sockdl, 0, NULL);
+    HANDLE thread = CreateThread(NULL, 0, AcceptSocket, &clientdl, 0, NULL);
 
 #else
-    sockdl.socket = connSocket;
-    if(pthread_create(&threads[logicalThreadIndex], NULL, AcceptSocket, &sockdl)) {
+    clientdl.socket = connSocket;
+    if(pthread_create(&threads[logicalThreadIndex], NULL, AcceptSocket, &clientdl)) {
       // Error couldn't create thread.
       return false;
     }
@@ -342,6 +345,33 @@ connState_t Socket::OpenNextConnection(fileDownload_t* dl, fileDownloadSource_t&
 #endif
   
   return CS_OPENING;
+}
+
+bool FindLocalFile(fileDownload_t* dl) {
+  DIR* dir;
+  struct dirent* ent;
+
+  if((dir = opendir ("./")) != NULL) { // current working directory
+    while((ent = readdir(dir)) != NULL) {
+      if(strcmp(ent->d_name, dl->fileName) == 0) {
+#if defined (_WIN32)
+	
+#else
+	if(realpath(ent->d_name, dl->tempPath) == NULL) {
+	  PrintError(dl, "findlocalfile (%s)", dl->tempPath);
+	  return false;
+	}
+#endif
+      }
+    }
+    
+    closedir(dir);
+  } else {
+    PrintError(dl, "findlocalfile (%s)", dl->tempPath);
+    return false;
+  }
+  
+  return true;
 }
 
 bool Socket::SendFileRequest(fileDownload_t* dl, fileDownloadSource_t& source) {
