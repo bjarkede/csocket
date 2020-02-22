@@ -42,6 +42,8 @@ typedef int SOCKET;
 #define DEFAULT_PORT "27015"
 #define MAX_TIMEOUT_MS 2000
 #define NUM_THREADS 5
+#define MAXPRINTMSG 512
+#define CHUNK_SIZE 1000
 
 #define s8 int8_t
 #define s16 int16_t
@@ -62,11 +64,18 @@ static const char sockaddr_in_large_enough[sizeof(sockaddr_in) >= sizeof(sockadd
 struct fileDownload_t {
   SOCKET socket;
   FILE* file;
+  char tempMessage[MAXPRINTMSG];  // for PrintError
+  char tempMessage2[MAXPRINTMSG]; // for PrintSocketError
+  char errorMessage[MAXPRINTMSG];
+  char fileName[MAX_PATH];
   int addressIndex;
   int addressCount;
   int startTimeMS;
   int timeOutStartTimeMS;
   bool connecting;
+  bool cleared;
+  bool exactMatch;
+  bool realFileName;
   char query[512];
   sockaddr_in addresses[16];
   char tempPath[MAX_PATH];
@@ -141,6 +150,9 @@ struct Socket {
   bool IsConnectionInProgressError();
   bool SetSocketBlocking(SOCKET socket, bool blocking);
   bool SetSocketOption(fileDownload_t* dl, int option, const void* data, size_t dataLength);
+
+  void PrintSocketError(fileDownload_t* dl, const char* functionName, int ec);
+  void PrintSocketError(fileDownload_t* dl, const char* functionName);
 };
 
 bool AllocBuffer(Buffer& buffer, uptr bytes);
@@ -149,3 +161,6 @@ bool ReadEntireFile(Buffer& buffer, const char* filePath);
 bool ShouldPrintHelp(int argc, char** argv);
 const char* GetExecutableFileName(char* argv0);
 void DownloadClear(sockDownload_t* dl);
+
+void PrintError(fileDownload_t* dl, const char* fmt, ...);
+

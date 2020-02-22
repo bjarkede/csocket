@@ -2,7 +2,7 @@
 
 static fileDownload_t cl_fileDL;
 
-//@TODO: Enhance the socket so it can handle multiple connections.
+//TODO: Set port as an argv argument?
 int main(int argc, char** argv) {
 
   if(ShouldPrintHelp(argc, argv)) {
@@ -25,8 +25,7 @@ int main(int argc, char** argv) {
   if(sock.Create(&cl_fileDL)) {;
     
     if(!sock.ListenBegin(&cl_fileDL)) {
-      //@TODO:
-      //If connection occurs create a new thread so we can handle multiple client connetions.
+ 
     }
 
     while(1) {

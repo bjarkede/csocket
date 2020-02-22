@@ -14,6 +14,7 @@ DWORD WINAPI AcceptSocket(void* data) {
   return 0;
 }
 #else
+//TODO: Make it so the client sends the request for a file.
 void* AcceptSocket(void* data) {
 
   sockDownload_t* dl = (sockDownload_t*)data;
@@ -21,10 +22,23 @@ void* AcceptSocket(void* data) {
   Buffer buf;
 
   while(1) {
-    if(recv(dl->socket, dl->recBuffer, sizeof(dl->recBuffer) - 1, 0) != SOCKET_ERROR) {
+    const int ec = recv(dl->socket, dl->recBuffer, sizeof(dl->recBuffer) - 1, 0);
+    if(ec > 0) {
       if(ReadEntireFile(buf, "/root/Documents/git/csocket/code/socket/hello.txt")) {
-	write(dl->socket, &buf, buf.length);
+
+	char buff[CHUNK_SIZE];
+	s32 offset = 0;
+	
+	while(1) {
+	  if(offset >= buf.length) break;
+	  memcpy(buff, (uint8_t*)buf.buffer + offset, CHUNK_SIZE);
+	  write(dl->socket, &buff, CHUNK_SIZE);
+
+	  offset += CHUNK_SIZE;
+	}
       }
+    } else {
+      //PrintError(dl, "recv", ec);
     }
   }
   
@@ -86,7 +100,7 @@ bool Socket::SetSocketOption(fileDownload_t* dl, int option, const void* data, s
 #else
   if(setsockopt(dl->socket, SOL_SOCKET, option, data, (socklen_t)dataLength) == SOCKET_ERROR) {
 #endif
-    // print socket error
+    PrintSocketError(dl, "setsockoption");
     return false;
     
   }
@@ -102,12 +116,12 @@ bool Socket::Create(fileDownload_t* dl) {
 
   dl->socket = socket(AF_INET, SOCK_STREAM, IPPROTO_IP); // Create the socket.
   if(dl->socket == INVALID_SOCKET) {
-    // print socket error
+    PrintSocketError(dl, "createsocket");
     return false;
   }
 
   if(!SetSocketBlocking(dl->socket, false)) {
-    // print socket error
+    PrintSocketError(dl, "ioctlsocket/fnctl");
     return false;
   }
 
@@ -143,10 +157,6 @@ void DownloadClear(sockDownload_t* dl) {
 
 //TODO
 bool Socket::AcceptNextConnection(fileDownload_t* dl) {
-
-  int opts;
-  opts = fcntl(dl->socket, F_GETFL);
-  opts = opts & (~O_NONBLOCK);
 
   SOCKET connSocket = INVALID_SOCKET;
   sockDownload_t sockdl;
@@ -210,7 +220,7 @@ bool Socket::ListenBegin(fileDownload_t* dl) {
     
     if(bind(dl->socket, (struct sockaddr *)&dl->serv_addr, sizeof(dl->serv_addr)) == SOCKET_ERROR) {
       // Binding failed
-      printf("Binding failed with error: %d...\n", GetSocketError());
+      PrintSocketError(dl, "listenbegin");
       return false;
     }
    
@@ -252,7 +262,7 @@ bool Socket::DownloadBegin(fileDownload_t* dl, fileDownloadSource_t& source) {
 
     freeaddrinfo(addresses);
   } else {
-    // getaddrinfo error
+    PrintSocketError(dl, "getaddrinfo", ec);
   }
 
   if(dl->addressCount < ARRAY_LEN(dl->addresses)) {
@@ -317,7 +327,7 @@ connState_t Socket::OpenNextConnection(fileDownload_t* dl, fileDownloadSource_t&
 
   ++dl->addressIndex;
   if(!IsConnectionInProgressError()) {
-    // Print error connection
+    PrintSocketError(dl, "openconnection");
     return CS_CLOSED;
   }
   
@@ -343,7 +353,7 @@ bool Socket::SendFileRequest(fileDownload_t* dl, fileDownloadSource_t& source) {
   snprintf(request, sizeof(request),"xxx"); //@TODO: Format request
   const int requestLength = strlen(request);
   if(send(dl->socket, request, requestLength, 0) != requestLength) {
-    // Print socket error, failed to send
+    PrintSocketError(dl, "sendfilereq");
     return false;
   }
 
@@ -478,3 +488,38 @@ const char* GetExecutableFileName(char* argv0) {
 
   return fileName;
 }
+
+void PrintError(fileDownload_t* dl, const char* fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(dl->tempMessage, sizeof(dl->tempMessage), fmt, ap);
+  va_end(ap);
+
+  if(dl->realFileName && dl->fileName[0] != '\0') {
+    snprintf(dl->errorMessage, sizeof(dl->errorMessage), "File download failed: file '%s' - %s", dl->fileName, dl->tempMessage);
+  } else {
+    snprintf(dl->errorMessage, sizeof(dl->errorMessage), "File download failed: %s", dl->tempMessage);
+  }
+  
+  const int l = strlen(dl->errorMessage);
+  if(l > 0 && dl->errorMessage[l - 1] != '\n')
+    strcat(dl->errorMessage, "\n");
+  
+  printf(dl->errorMessage);
+}
+
+void Socket::PrintSocketError(fileDownload_t* dl, const char* functionName, int ec) {
+
+  const char* const errorMsg = strerror_r(ec, dl->tempMessage2, sizeof(dl->tempMessage2));
+  if(errorMsg == NULL) {
+    PrintError(dl, "%s failed with error %d", functionName, ec);
+    return;
+  }
+  
+  PrintError(dl, "%s failed with error %d (%s)", functionName, ec, errorMsg);
+}
+
+void Socket::PrintSocketError(fileDownload_t* dl, const char* functionName) {
+  PrintSocketError(dl, functionName, GetSocketError());
+}
+ 
