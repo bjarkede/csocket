@@ -22,6 +22,7 @@ int main(int argc, char *argv[])
     struct hostent *server;
 
     char buffer[256];
+    char buf[256];
     if (argc < 3) {
        fprintf(stderr,"usage %s hostname port\n", argv[0]);
        exit(0);
@@ -43,17 +44,36 @@ int main(int argc, char *argv[])
     serv_addr.sin_port = htons(portno);
     if (connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0) 
         error("ERROR connecting");
-    printf("Please enter the message: ");
-    bzero(buffer,256);
-    fgets(buffer,255,stdin);
-    n = write(sockfd,buffer,strlen(buffer));
-    if (n < 0) 
-         error("ERROR writing to socket");
-    bzero(buffer,256);
-    n = read(sockfd,buffer,255);
-    if (n < 0) 
-         error("ERROR reading from socket");
-    printf("%s\n",buffer);
+    
+   
+      printf("Please enter the message: ");
+      bzero(buffer,256);
+      snprintf(buffer, 256,"RETR hello2.txt");
+      n = write(sockfd,buffer,strlen(buffer));
+      if (n < 0) 
+	error("ERROR writing to socket");
+      bzero(buffer,256);
+      n = read(sockfd,buffer,255);
+      if (n < 0) 
+	error("ERROR reading from socket");
+      printf("%s",buffer);
+
+      bzero(buffer, 256);
+
+      printf("Please enter the message: ");
+      bzero(buf,256);
+      snprintf(buf, 256, "RETR hello.txt");
+      n = write(sockfd,buf,strlen(buf));
+      if (n < 0) 
+	error("ERROR writing to socket");
+      bzero(buf,256);
+      n = read(sockfd,buf,255);
+      if (n < 0) 
+	error("ERROR reading from socket");
+      printf("%s",buf);
+
+      bzero(buffer, 256);
+   
     close(sockfd);
     return 0;
 }

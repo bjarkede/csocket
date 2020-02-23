@@ -25,24 +25,54 @@ void* AcceptSocket(void* data) {
   Buffer buf;
 
   while(1) {
-    const int ec = recv(dl.socket, dl.recBuffer, sizeof(dl.recBuffer) - 1, 0);
+    const int ec = recv(dl.socket, dl.recBuffer, sizeof(dl.recBuffer), 0);
     if(ec > 0) {
 
-      memcpy(dl.fileName, dl.recBuffer, strlen(dl.recBuffer) - 1);
+      char* token;
+      token = strtok(dl.recBuffer, " ");
+
+      printf("%s\n", token);
       
-      if(FindLocalFile(&dl)) {
-	if(ReadEntireFile(buf, dl.tempPath)) {
+      if(strncmp(token, "QUIT", strlen(token)) == 0) {
+	break;
+      }
 
-	  char buff[CHUNK_SIZE];
-	  s32 offset = 0;
+      if(strncmp(token, "RETR", strlen(token)) == 0) {
+	token = strtok(NULL, ""); // Get the next token
+
+	printf("%s %d\n", token, strlen(token));
 	
-	  while(1) {
-	    if(offset > buf.length) break;
-	    memcpy(buff, (uint8_t*)buf.buffer + offset, CHUNK_SIZE);
-	    write(dl.socket, &buff, CHUNK_SIZE);
+	memcpy(dl.fileName, token, strlen(token));
+	if(FindLocalFile(&dl)) {
+	  if(ReadEntireFile(buf, dl.tempPath)) {
+	    
+	    char buff[CHUNK_SIZE];
+	    s32 offset = 0;
 
-	    offset += CHUNK_SIZE;
+	    if(buf.length < CHUNK_SIZE) {
+	      write(dl.socket, (uint8_t*)buf.buffer, buf.length);
+	    } 
+	    
+	    for(int i = CHUNK_SIZE; i < buf.length + CHUNK_SIZE; i += CHUNK_SIZE) {
+	      memcpy(buff, (uint8_t*)buf.buffer, i);
+	      write(dl.socket, &buff, CHUNK_SIZE);	
+	      buf.buffer += i;
+	    }
+	    
 	  }
+	}
+
+	memset(&dl.recBuffer, 0, sizeof(dl.recBuffer));
+	memset(&dl.tempPath, 0, sizeof(dl.tempPath));
+	memset(&dl.fileName, 0, sizeof(dl.fileName));
+      }
+
+      if(strncmp(token, "PWD", strlen(token)) == 0) {
+	char cwd[MAX_PATH];
+	if (getcwd(cwd, sizeof(cwd)) != NULL) {
+	  write(dl.socket, &cwd, strlen(cwd));
+	} else {
+	  write(dl.socket, "failed getting current directory", 33);
 	}
       }
     } else {
@@ -159,7 +189,7 @@ void DownloadClear(fileDownload_t* dl) {
   *dl->tempPath = '\0';
   *dl->fileName = '\0';
   *dl->errorMessage = '\0';
-  dl->socket = INVALID_SOCKET;
+  //dl->socket = INVALID_SOCKET;
   dl->file = NULL;
   dl->addressIndex = 0;
   dl->addressCount = 0;
@@ -376,8 +406,10 @@ bool FindLocalFile(fileDownload_t* dl) {
       if(strcmp(ent->d_name, dl->fileName) == 0) {
 #if defined (_WIN32)
 	
-#else
-	if(realpath(ent->d_name, dl->tempPath) == NULL) {
+#else	
+	if(realpath(ent->d_name, dl->tempPath) != NULL) {
+	  printf("%s\n", dl->tempPath);
+	} else {
 	  PrintError(dl, "findlocalfile (%s)", dl->tempPath);
 	  return false;
 	}
@@ -385,12 +417,13 @@ bool FindLocalFile(fileDownload_t* dl) {
       }
     }
     
-    closedir(dir);
   } else {
     PrintError(dl, "findlocalfile (%s)", dl->tempPath);
     return false;
   }
+
   
+ 
   return true;
 }
 
@@ -571,5 +604,24 @@ void Socket::PrintSocketError(fileDownload_t* dl, const char* functionName, int 
 
 void Socket::PrintSocketError(fileDownload_t* dl, const char* functionName) {
   PrintSocketError(dl, functionName, GetSocketError());
+}
+
+ /* Returns the length of the segment leading to the last 
+   characters of s in accept. */
+size_t strrcspn (const char *s, const char *reject)
+{
+  const char *ch;
+  size_t len = strlen(s);
+  size_t origlen = len;
+
+  while (len > 0) {
+    for (ch = reject ; *ch != 0 ; ch++) {
+      if (s[len - 1] == *ch) {
+        return len;
+      }
+    }
+    len--;
+  }
+  return origlen;
 }
  

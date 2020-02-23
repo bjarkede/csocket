@@ -162,3 +162,4 @@ void DownloadClear(fileDownload_t* dl);
 
 void PrintError(fileDownload_t* dl, const char* fmt, ...);
 
+size_t strrcspn (const char *s, const char *reject);
