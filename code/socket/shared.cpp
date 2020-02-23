@@ -30,9 +30,7 @@ void* AcceptSocket(void* data) {
 
       char* token;
       token = strtok(dl.recBuffer, " ");
-      
-      printf("%s %d\n", token, strlen(token));
-      
+        
       if(strncmp(token, "QUIT", strlen(token) - 1) == 0) {
 	break;
       }
@@ -49,8 +47,8 @@ void* AcceptSocket(void* data) {
 	    snprintf(fileSize, MAX_PATH, "%d", (int)buf.length);
 	    write(dl.socket, fileSize, MAX_PATH);
 	    
-	    for(int i = 0; i <= buf.length; i += CHUNK_SIZE) {
-	      write(dl.socket, (uint8_t*)buf.buffer + i, CHUNK_SIZE);	
+	    for(int i = 0; i < buf.length; i += CHUNK_SIZE) {
+	      write(dl.socket, buf.buffer + i, CHUNK_SIZE);	
 	    }	
 	  }
 	}
@@ -70,6 +68,30 @@ void* AcceptSocket(void* data) {
 	  write(dl.socket, "failed getting current directory", 33);
 	}
       }
+
+      //@TODO:
+      //Special cases for LIST.
+      if(strncmp(token, "LIST", strlen(token) - 1) == 0) {
+
+	DIR* dir;
+	struct dirent* ent;
+	char list[MAX_PATH];
+	strcpy(list, "List of files: \n\n");
+
+	if((dir = opendir("./")) != NULL) {
+	  while((ent = readdir(dir)) != NULL) {	     
+	    if(ent->d_type == DT_REG) {
+	      strncat(list, strcat(ent->d_name, "\n"), ent->d_reclen + 1);
+	    }
+	  }
+	} else {
+	  PrintError(&dl, "LIST (%d)", errno);
+	}
+
+	write(dl.socket, list, sizeof(list));
+	closedir(dir);
+      }
+      
     } else {
       //PrintError(dl, "recv", ec);
     }

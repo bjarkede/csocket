@@ -46,18 +46,28 @@ int main(int argc, char *argv[])
         error("ERROR connecting");
     
 
+   
      printf("Please enter the message: ");
      bzero(buffer,2048576);
      fgets(buffer,255,stdin);
-     n = write(sockfd,buffer,strlen(buffer));
+     n = write(sockfd,"RETR ikosaeder.jpg\n",strlen("RETR ikosaeder.jpg\n"));
      if (n < 0) 
        error("ERROR writing to socket");
      bzero(buffer,2048576);
      n = read(sockfd,buffer,2048576);
+     bzero(buffer,2048576);
+     n = read(sockfd,buffer,2048576);
      if (n < 0) 
        error("ERROR reading from socket");
-     printf("%s\n",buffer);
+     if(sizeof(buffer) > 9000) {
+       FILE* file;
 
+       file = fopen("./test.jpg", "wb");
+       fwrite(buffer, sizeof(buffer), 1, file);
+       fclose(file);
+     }
+     printf("%s\n", buffer);
+   
    
     close(sockfd);
     return 0;
