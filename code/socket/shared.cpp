@@ -14,39 +14,43 @@ DWORD WINAPI AcceptSocket(void* data) {
   return 0;
 }
 #else
+//@TODO:
+// We need to make the server/client follow our own custom
+// protocol. -bjarke, 23rd February 2020
 void* AcceptSocket(void* data) {
 
-  fileDownload_t* dl = (fileDownload_t*)data;
+  fileDownload_t dl;
+  dl.socket = *((SOCKET*)data);
 
   Buffer buf;
 
   while(1) {
-    const int ec = recv(dl->socket, dl->recBuffer, sizeof(dl->recBuffer) - 1, 0);
+    const int ec = recv(dl.socket, dl.recBuffer, sizeof(dl.recBuffer) - 1, 0);
     if(ec > 0) {
 
-      memcpy(dl->fileName, dl->recBuffer, strlen(dl->recBuffer) - 1);
+      memcpy(dl.fileName, dl.recBuffer, strlen(dl.recBuffer) - 1);
       
-      if(FindLocalFile(dl)) {
-	if(ReadEntireFile(buf, dl->tempPath)) {
+      if(FindLocalFile(&dl)) {
+	if(ReadEntireFile(buf, dl.tempPath)) {
 
 	  char buff[CHUNK_SIZE];
 	  s32 offset = 0;
 	
 	  while(1) {
-	    if(offset >= buf.length) break;
+	    if(offset > buf.length) break;
 	    memcpy(buff, (uint8_t*)buf.buffer + offset, CHUNK_SIZE);
-	    write(dl->socket, &buff, CHUNK_SIZE);
+	    write(dl.socket, &buff, CHUNK_SIZE);
 
 	    offset += CHUNK_SIZE;
 	  }
 	}
-      } 
+      }
     } else {
       //PrintError(dl, "recv", ec);
     }
   }
 
-  closesocket(dl->socket);
+  closesocket(dl.socket);
   pthread_exit(NULL);
 }
 #endif
@@ -152,10 +156,26 @@ bool Socket::Create(fileDownload_t* dl) {
 }
 
 void DownloadClear(fileDownload_t* dl) {
+  *dl->tempPath = '\0';
+  *dl->fileName = '\0';
+  *dl->errorMessage = '\0';
   dl->socket = INVALID_SOCKET;
-  dl->file   = NULL;
+  dl->file = NULL;
+  dl->addressIndex = 0;
+  dl->addressCount = 0;
+  //dl->startTimeMS = INT_MIN;
+  //dl->crc32 = 0;
+  //dl->bytesHeader = 0;
   dl->bytesTotal = 0;
   dl->bytesDownloaded = 0;
+  //dl->headerParsed = false;
+  //dl->badResponse = false;
+  //dl->timeOutStartTimeMS = INT_MIN;
+  //dl->lastErrorTimeOut = false;
+  //dl->sourceIndex = 0;
+  dl->exactMatch = false;
+  dl->cleared = true;
+  dl->connecting = false;
 }
 
 //TODO
@@ -170,8 +190,8 @@ bool Socket::AcceptNextConnection(fileDownload_t* dl) {
     HANDLE thread = CreateThread(NULL, 0, AcceptSocket, &clientdl, 0, NULL);
 
 #else
-    clientdl.socket = connSocket;
-    if(pthread_create(&threads[logicalThreadIndex], NULL, AcceptSocket, &clientdl)) {
+    SOCKET l = connSocket;
+    if(pthread_create(&threads[logicalThreadIndex], NULL, AcceptSocket, &l)) {
       // Error couldn't create thread.
       return false;
     }
