@@ -30,44 +30,39 @@ void* AcceptSocket(void* data) {
 
       char* token;
       token = strtok(dl.recBuffer, " ");
-
-      printf("%s\n", token);
       
-      if(strncmp(token, "QUIT", strlen(token)) == 0) {
+      printf("%s %d\n", token, strlen(token));
+      
+      if(strncmp(token, "QUIT", strlen(token) - 1) == 0) {
 	break;
       }
 
-      if(strncmp(token, "RETR", strlen(token)) == 0) {
+      if(strncmp(token, "RETR", strlen(token) - 1) == 0) {
 	token = strtok(NULL, ""); // Get the next token
-
-	printf("%s %d\n", token, strlen(token));
+	token[strcspn(token, "\n")] = 0;
 	
 	memcpy(dl.fileName, token, strlen(token));
 	if(FindLocalFile(&dl)) {
 	  if(ReadEntireFile(buf, dl.tempPath)) {
-	    
-	    char buff[CHUNK_SIZE];
-	    s32 offset = 0;
 
-	    if(buf.length < CHUNK_SIZE) {
-	      write(dl.socket, (uint8_t*)buf.buffer, buf.length);
-	    } 
+	    char fileSize[MAX_PATH];
+	    snprintf(fileSize, MAX_PATH, "%d", (int)buf.length);
+	    write(dl.socket, fileSize, MAX_PATH);
 	    
-	    for(int i = CHUNK_SIZE; i < buf.length + CHUNK_SIZE; i += CHUNK_SIZE) {
-	      memcpy(buff, (uint8_t*)buf.buffer, i);
-	      write(dl.socket, &buff, CHUNK_SIZE);	
-	      buf.buffer += i;
-	    }
-	    
+	    for(int i = 0; i <= buf.length; i += CHUNK_SIZE) {
+	      write(dl.socket, (uint8_t*)buf.buffer + i, CHUNK_SIZE);	
+	    }	
 	  }
 	}
 
 	memset(&dl.recBuffer, 0, sizeof(dl.recBuffer));
 	memset(&dl.tempPath, 0, sizeof(dl.tempPath));
 	memset(&dl.fileName, 0, sizeof(dl.fileName));
+	memset(buf.buffer, 0, sizeof(buf.buffer));
+	buf.length = 0;
       }
 
-      if(strncmp(token, "PWD", strlen(token)) == 0) {
+      if(strncmp(token, "PWD", strlen(token) - 1) == 0) {
 	char cwd[MAX_PATH];
 	if (getcwd(cwd, sizeof(cwd)) != NULL) {
 	  write(dl.socket, &cwd, strlen(cwd));
