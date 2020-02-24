@@ -3,6 +3,14 @@
 static pthread_t threads[NUM_THREADS];
 static unsigned int logicalThreadIndex;
 
+static void FormatQueryLocal(char* query, int querySize, const char* fileName) {
+  printf(query, querySize, "file?n=%s", fileName);
+}
+
+static const fileDownloadSource_t fileDLSources[1] = {
+ {"Local", "localhost", "0.0.0.0", 27015, &FormatQueryLocal}
+};
+
 // TODO
 #if defined (_WIN32)
 DWORD WINAPI AcceptSocket(void* data) {
@@ -43,9 +51,9 @@ void* AcceptSocket(void* data) {
 	if(FindLocalFile(&dl)) {
 	  if(ReadEntireFile(buf, dl.tempPath)) {
 
-	    char fileSize[MAX_PATH];
-	    snprintf(fileSize, MAX_PATH, "%d", (int)buf.length);
-	    write(dl.socket, fileSize, MAX_PATH);
+	    //char fileSize[MAX_PATH];
+	    //snprintf(fileSize, MAX_PATH, "%d", (int)buf.length);
+	    //write(dl.socket, fileSize, MAX_PATH);
 	    
 	    for(int i = 0; i < buf.length; i += CHUNK_SIZE) {
 	      write(dl.socket, buf.buffer + i, CHUNK_SIZE);	
@@ -130,7 +138,7 @@ bool File::Write(const void* data, size_t bytes) {
   return fwrite(data, sizeof(char), bytes, (FILE*)file_buffer) == 1;
 }
 
-Socket::Socket() {}
+Socket::Socket(fileDownload_t dl_) : dl(dl_) {}
 
 Socket::~Socket() {
 }
@@ -148,13 +156,13 @@ bool Socket::SetSocketBlocking(SOCKET socket, bool blocking) {
 #endif
 }
 
-bool Socket::SetSocketOption(fileDownload_t* dl, int option, const void* data, size_t dataLength) {
+bool Socket::SetSocketOption(int option, const void* data, size_t dataLength) {
 #if defined(_WIN32)
-  if(setsockopt(dl->socket, SOL_SOCKET, option, (const char*)data, (int)dataLength) == SOCKET_ERROR) {
+  if(setsockopt(dl.socket, SOL_SOCKET, option, (const char*)data, (int)dataLength) == SOCKET_ERROR) {
 #else
-  if(setsockopt(dl->socket, SOL_SOCKET, option, data, (socklen_t)dataLength) == SOCKET_ERROR) {
+  if(setsockopt(dl.socket, SOL_SOCKET, option, data, (socklen_t)dataLength) == SOCKET_ERROR) {
 #endif
-    PrintSocketError(dl, "setsockoption");
+    PrintSocketError("setsockoption");
     return false;
     
   }
@@ -162,20 +170,20 @@ bool Socket::SetSocketOption(fileDownload_t* dl, int option, const void* data, s
   return true;
 }
 
-bool Socket::Create(fileDownload_t* dl) {
-  if(dl->socket != INVALID_SOCKET) {
-    closesocket(dl->socket);
-    dl->socket = INVALID_SOCKET;
+bool Socket::Create() {
+  if(dl.socket != INVALID_SOCKET) {
+    closesocket(dl.socket);
+    dl.socket = INVALID_SOCKET;
   }
 
-  dl->socket = socket(AF_INET, SOCK_STREAM, IPPROTO_IP); // Create the socket.
-  if(dl->socket == INVALID_SOCKET) {
-    PrintSocketError(dl, "createsocket");
+  dl.socket = socket(AF_INET, SOCK_STREAM, IPPROTO_IP); // Create the socket.
+  if(dl.socket == INVALID_SOCKET) {
+    PrintSocketError("createsocket");
     return false;
   }
 
-  if(!SetSocketBlocking(dl->socket, false)) {
-    PrintSocketError(dl, "ioctlsocket/fnctl");
+  if(!SetSocketBlocking(dl.socket, false)) {
+    PrintSocketError("ioctlsocket/fnctl");
     return false;
   }
 
@@ -187,7 +195,7 @@ bool Socket::Create(fileDownload_t* dl) {
   timeout.tv_usec = 1000;
 #endif
 
-  if(!SetSocketOption(dl, SO_RCVTIMEO, &timeout, sizeof(timeout)))
+  if(!SetSocketOption(SO_RCVTIMEO, &timeout, sizeof(timeout)))
     return false;
   
 #if defined(_WIN32)
@@ -196,7 +204,7 @@ bool Socket::Create(fileDownload_t* dl) {
   timeout.tv_sec  = MAX_TIMEOUT_MS / 1000;
   timeout.tv_usec = MAX_TIMEOUT_MS * 1000 - timeout.tv_sec * 1000000;
 #endif
-  if(!SetSocketOption(dl, SO_SNDTIMEO, &timeout, sizeof(timeout)))
+  if(!SetSocketOption(SO_SNDTIMEO, &timeout, sizeof(timeout)))
     return false;
 
   return true;
@@ -226,12 +234,12 @@ void DownloadClear(fileDownload_t* dl) {
 }
 
 //TODO
-bool Socket::AcceptNextConnection(fileDownload_t* dl) {
+bool Socket::AcceptNextConnection() {
 
   SOCKET connSocket = INVALID_SOCKET;
   fileDownload_t clientdl;
-  socklen_t clilen = sizeof(dl->client_addr);
-  connSocket = accept(dl->socket, (sockaddr*)&dl->client_addr, &clilen);
+  socklen_t clilen = sizeof(dl.client_addr);
+  connSocket = accept(dl.socket, (sockaddr*)&dl.client_addr, &clilen);
   if(connSocket != INVALID_SOCKET) {
 #if defined (_WIN32)
     HANDLE thread = CreateThread(NULL, 0, AcceptSocket, &clientdl, 0, NULL);
@@ -255,7 +263,7 @@ bool Socket::AcceptNextConnection(fileDownload_t* dl) {
   return true;
 }
 
-bool Socket::ListenBegin(fileDownload_t* dl) {
+bool Socket::ListenBegin() {
   
   addrInfo_t hints;
   memset(&hints, 0, sizeof(hints));
@@ -276,11 +284,11 @@ bool Socket::ListenBegin(fileDownload_t* dl) {
 	 a->ai_socktype == SOCK_STREAM &&
 	 a->ai_protocol == IPPROTO_TCP) {
 	
-	sockaddr_in&  address = dl->serv_addr;
+	sockaddr_in&  address = dl.serv_addr;
 	memset(&address, 0, sizeof(sockaddr_in));
-	dl->serv_addr.sin_family = AF_INET;
-	dl->serv_addr.sin_addr.s_addr = INADDR_ANY;
-	dl->serv_addr.sin_port = htons(27015);
+	dl.serv_addr.sin_family = AF_INET;
+	dl.serv_addr.sin_addr.s_addr = INADDR_ANY;
+	dl.serv_addr.sin_port = htons(27015);
 	//memcpy(&address, a->ai_addr, sizeof(*a->ai_addr));
 	
 	break;
@@ -288,9 +296,9 @@ bool Socket::ListenBegin(fileDownload_t* dl) {
       a = a->ai_next;
     }
     
-    if(bind(dl->socket, (struct sockaddr *)&dl->serv_addr, sizeof(dl->serv_addr)) == SOCKET_ERROR) {
+    if(bind(dl.socket, (struct sockaddr *)&dl.serv_addr, sizeof(dl.serv_addr)) == SOCKET_ERROR) {
       // Binding failed
-      PrintSocketError(dl, "listenbegin");
+      PrintSocketError("listenbegin");
       return false;
     }
    
@@ -300,14 +308,20 @@ bool Socket::ListenBegin(fileDownload_t* dl) {
     return false;
   }
 
-  if(listen(dl->socket, SOMAXCONN) == SOCKET_ERROR) {
+  if(listen(dl.socket, SOMAXCONN) == SOCKET_ERROR) {
     return false;
   }
 
   return true;
 }
  
-bool Socket::DownloadBegin(fileDownload_t* dl, fileDownloadSource_t& source) {
+bool Socket::DownloadBegin(int sourceIndex) {
+
+  DownloadClear(&dl);
+  dl.sourceIndex = sourceIndex;
+
+  if(!Create())
+    return false;
   
   addrInfo_t hints;
   memset(&hints, 0, sizeof(hints));
@@ -315,6 +329,7 @@ bool Socket::DownloadBegin(fileDownload_t* dl, fileDownloadSource_t& source) {
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_protocol = IPPROTO_TCP;
 
+  const fileDownloadSource_t& source = fileDLSources[dl.sourceIndex];
   addrInfo_t* addresses;
   char service[256];
   snprintf(service, sizeof(service), "%d", source.port);
@@ -323,8 +338,8 @@ bool Socket::DownloadBegin(fileDownload_t* dl, fileDownloadSource_t& source) {
   if(ec == 0) {
     addrInfo_t* a = addresses;
 
-    while(a != NULL && dl->addressCount < ARRAY_LEN(dl->addresses)) {
-      sockaddr_in& address = dl->addresses[dl->addressCount++];
+    while(a != NULL && dl.addressCount < ARRAY_LEN(dl.addresses)) {
+      sockaddr_in& address = dl.addresses[dl.addressCount++];
       memset(&address, 0, sizeof(sockaddr_in));
       memcpy(&address, a->ai_addr, sizeof(*a->ai_addr));
       a = a->ai_next;
@@ -332,11 +347,11 @@ bool Socket::DownloadBegin(fileDownload_t* dl, fileDownloadSource_t& source) {
 
     freeaddrinfo(addresses);
   } else {
-    PrintSocketError(dl, "getaddrinfo", ec);
+    PrintSocketError("getaddrinfo", ec);
   }
 
-  if(dl->addressCount < ARRAY_LEN(dl->addresses)) {
-    sockaddr_in& address = dl->addresses[dl->addressCount++];
+  if(dl.addressCount < ARRAY_LEN(dl.addresses)) {
+    sockaddr_in& address = dl.addresses[dl.addressCount++];
     memset(&address, 0, sizeof(address));
     address.sin_family = AF_INET;
     address.sin_port = htons(source.port);
@@ -344,13 +359,13 @@ bool Socket::DownloadBegin(fileDownload_t* dl, fileDownloadSource_t& source) {
   }
 
   for(;;) {
-    const connState_t result = OpenNextConnection(dl, source);
+    const connState_t result = OpenNextConnection();
     if(result == CS_OPENING) {
-      dl->connecting = true;
+      dl.connecting = true;
       return true;
     }
     if(result == CS_OPEN) {
-      dl->timeOutStartTimeMS = INT_MIN;
+      dl.timeOutStartTimeMS = INT_MIN;
       return true;
     }
     if(result == CS_LIST_EXHAUSTED)
@@ -376,39 +391,39 @@ bool Socket::IsConnectionInProgressError() {
 #endif
 }
  
-connState_t Socket::OpenNextConnection(fileDownload_t* dl, fileDownloadSource_t& source) {
-  if(dl->addressIndex >= dl->addressCount) {
+connState_t Socket::OpenNextConnection() {
+  if(dl.addressIndex >= dl.addressCount) {
     return CS_LIST_EXHAUSTED;
   }
 
-  if(dl->addressIndex >= 1) {
-    printf("Attempting to download again at address #%d...\n", dl->addressIndex + 1);
+  if(dl.addressIndex >= 1) {
+    printf("Attempting to download again at address #%d...\n", dl.addressIndex + 1);
 
-    if(!Create(dl))
+    if(!Create())
       return CS_CLOSED;
   }
 
-  const sockaddr_in& address = dl->addresses[dl->addressIndex];
-  if(connect(dl->socket, (const sockaddr*)&address, sizeof(sockaddr_in)) != SOCKET_ERROR) {
-    const connState_t result = SendFileRequest(dl, source) ? CS_OPEN : CS_CLOSED;
-    ++dl->addressIndex;
+  const sockaddr_in& address = dl.addresses[dl.addressIndex];
+  if(connect(dl.socket, (const sockaddr*)&address, sizeof(sockaddr_in)) != SOCKET_ERROR) {
+    const connState_t result = SendFileRequest() ? CS_OPEN : CS_CLOSED;
+    ++dl.addressIndex;
     return result;
   }
 
-  ++dl->addressIndex;
+  ++dl.addressIndex;
   if(!IsConnectionInProgressError()) {
-    PrintSocketError(dl, "openconnection");
+    PrintSocketError("openconnection");
     return CS_CLOSED;
   }
   
 #if defined(_WIN32)
   SYSTEMTIME st;
   GetSystemTime(&st);
-  dl->timeOutStartTimeMS = st.wMilliseconds;
+  dl.timeOutStartTimeMS = st.wMilliseconds;
 #else
   struct timeval tv;
   gettimeofday(&tv, NULL);
-  dl->timeOutStartTimeMS = tv.tv_sec*1000LL + tv.tv_usec/1000;
+  dl.timeOutStartTimeMS = tv.tv_sec*1000LL + tv.tv_usec/1000;
 #endif
   
   return CS_OPENING;
@@ -444,16 +459,17 @@ bool FindLocalFile(fileDownload_t* dl) {
   return true;
 }
 
-bool Socket::SendFileRequest(fileDownload_t* dl, fileDownloadSource_t& source) {
+bool Socket::SendFileRequest() {
+  const fileDownloadSource_t& source = fileDLSources[dl.sourceIndex];
   const int port = source.port;
-  const char* const hostName = dl->addressIndex >= dl->addressCount ? source.numericHostName : source.hostName;
-  const char* const query = dl->query;
+  const char* const hostName = dl.addressIndex >= dl.addressCount ? source.numericHostName : source.hostName;
+  const char* const query = dl.query;
 
   char request[256];
   snprintf(request, sizeof(request),"xxx"); //@TODO: Format request
   const int requestLength = strlen(request);
-  if(send(dl->socket, request, requestLength, 0) != requestLength) {
-    PrintSocketError(dl, "sendfilereq");
+  if(send(dl.socket, request, requestLength, 0) != requestLength) {
+    PrintSocketError("sendfilereq");
     return false;
   }
 
@@ -465,11 +481,11 @@ bool Socket::SendFileRequest(fileDownload_t* dl, fileDownloadSource_t& source) {
       return false;
   }
   
-  if(GetTempFileNameA(tempPath, "", 0, dl->tempPath) == 0) {
+  if(GetTempFileNameA(tempPath, "", 0, dl.tempPath) == 0) {
     // Print error creating a file name
     return false;
   }
-  dl->file = fopen(dl->tempPath, "wb");
+  dl.file = fopen(dl.tempPath, "wb");
 #else
   if(getcwd(tempPath, sizeof(tempPath)) == NULL) {
     // Error couldn't get current path
@@ -477,11 +493,11 @@ bool Socket::SendFileRequest(fileDownload_t* dl, fileDownloadSource_t& source) {
   }
 
   // Build the current path to the file download.
-  snprintf(dl->tempPath, sizeof(dl->tempPath), "%s/XXXXXX.tmp", tempPath);
-  const int fd = mkstemps(dl->tempPath, 4);
-  dl->file = fd != -1 ? fdopen(fd, "wb") : NULL;
+  snprintf(dl.tempPath, sizeof(dl.tempPath), "%s/XXXXXX.tmp", tempPath);
+  const int fd = mkstemps(dl.tempPath, 4);
+  dl.file = fd != -1 ? fdopen(fd, "wb") : NULL;
 #endif
-  if(dl->file == NULL) {
+  if(dl.file == NULL) {
     // Error opening file
     const int error = errno;
     char* const errorString = strerror(error);
@@ -493,11 +509,11 @@ bool Socket::SendFileRequest(fileDownload_t* dl, fileDownloadSource_t& source) {
 #if defined(_WIN32)
   SYSTEMTIME st;
   GetSystemTime(&st);
-  dl->startTimeMS = st.wMilliseconds;
+  dl.startTimeMS = st.wMilliseconds;
 #else
   struct timeval tv;
   gettimeofday(&tv, NULL);
-  dl->startTimeMS = tv.tv_sec*1000LL + tv.tv_usec/1000;
+  dl.startTimeMS = tv.tv_sec*1000LL + tv.tv_usec/1000;
 #endif
   
   return true;
@@ -608,37 +624,151 @@ void PrintError(fileDownload_t* dl, const char* fmt, ...) {
   printf(dl->errorMessage);
 }
 
-void Socket::PrintSocketError(fileDownload_t* dl, const char* functionName, int ec) {
+void Socket::PrintSocketError(const char* functionName, int ec) {
 
-  const char* const errorMsg = strerror_r(ec, dl->tempMessage2, sizeof(dl->tempMessage2));
+  const char* const errorMsg = strerror_r(ec, dl.tempMessage2, sizeof(dl.tempMessage2));
   if(errorMsg == NULL) {
-    PrintError(dl, "%s failed with error %d", functionName, ec);
+    PrintError(&dl, "%s failed with error %d", functionName, ec);
     return;
   }
   
-  PrintError(dl, "%s failed with error %d (%s)", functionName, ec, errorMsg);
+  PrintError(&dl, "%s failed with error %d (%s)", functionName, ec, errorMsg);
 }
 
-void Socket::PrintSocketError(fileDownload_t* dl, const char* functionName) {
-  PrintSocketError(dl, functionName, GetSocketError());
+void Socket::PrintSocketError(const char* functionName) {
+  PrintSocketError(functionName, GetSocketError());
 }
 
- /* Returns the length of the segment leading to the last 
-   characters of s in accept. */
-size_t strrcspn (const char *s, const char *reject)
-{
-  const char *ch;
-  size_t len = strlen(s);
-  size_t origlen = len;
+bool Socket::FileDownload_Active() {
+  return dl.cleared && dl.socket != INVALID_SOCKET;
+}
 
-  while (len > 0) {
-    for (ch = reject ; *ch != 0 ; ch++) {
-      if (s[len - 1] == *ch) {
-        return len;
-      }
-    }
-    len--;
-  }
-  return origlen;
+bool Socket::FileDownload_CheckActive() {
+  if(!FileDownload_Active())
+    return false;
+
+  PrintError(&dl, "Download already in progress for file %s", dl.fileName);
+  return true;
+}
+
+bool Socket::FileDownload_StartImpl(const char* fileName, int sourceIndex, bool exactMatch, bool realFileName) {
+  const fileDownloadSource_t& source = fileDLSources[sourceIndex];
+
+  printf("Attempting download from the %s file server...\n", source.name);
+  strncpy(dl.fileName, fileName, sizeof(dl.fileName));
+  dl.realFileName = realFileName;
+
+  const bool success = DownloadBegin(sourceIndex);
+  
 }
  
+bool Socket::FileDownload_Start(const char* fileName) {
+  if(FileDownload_CheckActive())
+    return false;
+
+  (*fileDLSources[0].formatQuery)(dl.query, sizeof(dl.query), fileName);
+  if(FileDownload_StartImpl(fileName, 0, false, true))
+    return true;
+}
+
+bool Socket::FileDownload_CleanUp(bool rename) {
+  if(!dl.cleared)
+    return false;
+
+  if(dl.socket != INVALID_SOCKET) {
+    closesocket(dl.socket);
+    dl.socket = INVALID_SOCKET;
+  }
+
+  if(dl.file != NULL) {
+    fclose(dl.file);
+    dl.file = NULL;
+  }
+
+  bool success = true;
+  if(rename) {
+
+    //TODO
+  }
+
+  if(unlink(dl.tempPath) != 0 && errno != ENOENT) {
+    PrintError(&dl, "Failed to delete file '%s'", dl.tempPath);
+  }
+
+  return success;
+}
+
+int Socket::FileDownload_Continue() {
+  if(dl.socket == INVALID_SOCKET)
+    return FDLS_NOTHING;
+
+  if(dl.connecting) {
+    connState_t cs = FinishCurrentConnection();
+    if(cs == CS_CLOSED) {
+      for(;;) {
+	cs = OpenNextConnection();
+	if(cs == CS_OPENING)
+	  return FDLS_IN_PROGRESS;
+	if(cs == CS_OPEN) {
+	  dl.connecting = false;
+	  dl.timeOutStartTimeMS = INT_MIN;
+	  dl.lastErrorTimeOut = false;
+	  return FDLS_IN_PROGRESS;
+	}
+	if(cs == CS_LIST_EXHAUSTED) {
+	  //@TODO: Cleanup the download.
+	  return FDLS_ERROR;
+	}
+      }
+    }
+    if(cs == CS_OPENING)
+      return FDLS_IN_PROGRESS;
+
+    dl.connecting = false;
+    dl.timeOutStartTimeMS = INT_MIN;
+    dl.lastErrorTimeOut = false;
+    return FDLS_IN_PROGRESS;
+  }
+
+  // Receive data.
+  const int ec = recv(dl.socket, dl.recBuffer, sizeof(dl.recBuffer), 0);
+  if(ec < 0) { // Some error happened
+
+  }
+
+  if(ec == 0) {
+    if(dl.bytesDownloaded == dl.bytesTotal) // All data has been sent
+      return FileDownload_CleanUp(true) ? FDLS_SUCCESS : FDLS_ERROR;
+
+    if(dl.badResponse) {
+      // Print Error: Some response error from the server.
+    } else {
+      // Print Error: Connection closed
+    }
+
+    FileDownload_CleanUp(false);
+    return FDLS_ERROR;
+  }
+
+  dl.bytesDownloaded += ec;
+  const u32 bytesToWrite = ec;
+  if(bytesToWrite > 0) {
+    if(fwrite(dl.recBuffer, bytesToWrite, 1, dl.file) != 1) {
+      const int err = errno;
+      char* const errorString = strerror(err);
+      PrintError(&dl, "Failed to write %d bytes to '%s' : %s (%d)",
+		 (int)ec, dl.tempPath, errorString ? errorString : "?", err);
+      FileDownload_CleanUp(false);
+      return FDLS_ERROR;
+    }
+  }
+
+  if(dl.bytesDownloaded == dl.bytesTotal) {
+    return FileDownload_CleanUp(true) ? FDLS_SUCCESS : FDLS_ERROR;
+  }
+    
+  dl.timeOutStartTimeMS = INT_MIN;
+  dl.lastErrorTimeOut = false;
+
+  return FDLS_IN_PROGRESS;
+}

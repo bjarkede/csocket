@@ -71,6 +71,7 @@ struct fileDownload_t {
   char errorMessage[MAXPRINTMSG];
   char fileName[MAX_PATH];
   char recBuffer[1 << 20];
+  int sourceIndex;
   int addressIndex;
   int addressCount;
   int startTimeMS;
@@ -79,6 +80,8 @@ struct fileDownload_t {
   bool cleared;
   bool exactMatch;
   bool realFileName;
+  bool lastErrorTimeOut;
+  bool badResponse;
   char query[512];
   int bytesTotal;
   int bytesDownloaded;
@@ -110,7 +113,7 @@ struct fileDownloadSource_t {
   const char* hostName;
   const char* numericHostName; // fallback
   int port;
-  //filedlQueryFormatter_t formatQuery;
+  filedlQueryFormatter_t formatQuery;
 };
 
 struct Buffer {
@@ -132,24 +135,38 @@ struct File {
 };
 
 struct Socket {
-  Socket();
+  Socket(fileDownload_t dl_);
   ~Socket();
 
-  bool Create(fileDownload_t* dl);
-  bool ListenBegin(fileDownload_t* dl);
-  bool SendFileRequest(fileDownload_t* dl, fileDownloadSource_t& source);
-  bool DownloadBegin(fileDownload_t* dl, fileDownloadSource_t& source);
-  bool AcceptNextConnection(fileDownload_t* dl);
-  connState_t OpenNextConnection(fileDownload_t* dl, fileDownloadSource_t& source);
+  fileDownload_t dl;
+  
+  bool Create();
+  bool ListenBegin();
+  bool SendFileRequest();
+  bool DownloadBegin(int sourceIndex);
+  bool AcceptNextConnection();
+  connState_t OpenNextConnection();
+  connState_t FinishCurrentConnection();
 
   int GetSocketError();
   bool IsSocketTimeoutError();
   bool IsConnectionInProgressError();
   bool SetSocketBlocking(SOCKET socket, bool blocking);
-  bool SetSocketOption(fileDownload_t* dl, int option, const void* data, size_t dataLength);
+  bool SetSocketOption(int option, const void* data, size_t dataLength);
 
-  void PrintSocketError(fileDownload_t* dl, const char* functionName, int ec);
-  void PrintSocketError(fileDownload_t* dl, const char* functionName);
+  bool FileDownload_Start(const char* fileName);
+  bool FileDownload_StartImpl(const char* fileName, int sourceIndex, bool exactMatch, bool realFileName);
+  bool FileDownload_Checksum(const char* fileName, u32 fileCrc32, bool exactMatch);
+  bool FileDownload_CheckActive();
+  int  FileDownload_Continue();
+  bool FileDownload_Init();
+  bool FileDownload_Active();
+  bool FileDownload_Cancel();
+  bool FileDownload_CrashCleanUp();
+  bool FileDownload_CleanUp(bool rename);
+
+  void PrintSocketError(const char* functionName, int ec);
+  void PrintSocketError(const char* functionName);
 };
 
 bool FindLocalFile(fileDownload_t* dl);
@@ -161,5 +178,3 @@ const char* GetExecutableFileName(char* argv0);
 void DownloadClear(fileDownload_t* dl);
 
 void PrintError(fileDownload_t* dl, const char* fmt, ...);
-
-size_t strrcspn (const char *s, const char *reject);

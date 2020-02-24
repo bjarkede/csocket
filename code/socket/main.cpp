@@ -21,15 +21,15 @@ int main(int argc, char** argv) {
   // fileDownloadSource_t source = { "Test", "test.au.dk", "10.0.0.1", 8000 }; Used for client applications
   // could be an array of sources.
   
-  Socket sock;
-  if(sock.Create(&cl_fileDL)) {;
+  Socket sock(cl_fileDL);
+  if(sock.Create()) {;
     
-    if(!sock.ListenBegin(&cl_fileDL)) {
+    if(!sock.ListenBegin()) {
  
     }
 
     while(1) {
-      if(sock.AcceptNextConnection(&cl_fileDL)) {
+      if(sock.AcceptNextConnection()) {
         
       }
     }
