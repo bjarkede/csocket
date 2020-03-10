@@ -54,10 +54,11 @@ void* AcceptSocket(void* data) {
 	    //char fileSize[MAX_PATH];
 	    //snprintf(fileSize, MAX_PATH, "%d", (int)buf.length);
 	    //write(dl.socket, fileSize, MAX_PATH);
-	    
-	    for(int i = 0; i < buf.length; i += CHUNK_SIZE) {
-	      write(dl.socket, buf.buffer + i, CHUNK_SIZE);	
-	    }	
+
+	    //@TODO: Error when doing it in chunks right now
+	    //for(int i = 0; i < buf.length; i += CHUNK_SIZE) {
+	      write(dl.socket, buf.buffer, buf.length);	
+	      //}	
 	  }
 	}
 
@@ -390,6 +391,12 @@ bool Socket::IsConnectionInProgressError() {
   return ec == EINPROGRESS;
 #endif
 }
+
+//@TODO
+connState_t Socket::FinishCurrentConnection() {
+  connState_t temp;
+  return temp;
+}
  
 connState_t Socket::OpenNextConnection() {
   if(dl.addressIndex >= dl.addressCount) {
@@ -658,10 +665,9 @@ bool Socket::FileDownload_StartImpl(const char* fileName, int sourceIndex, bool 
   strncpy(dl.fileName, fileName, sizeof(dl.fileName));
   dl.realFileName = realFileName;
 
-  const bool success = DownloadBegin(sourceIndex);
-  
+  const bool success = DownloadBegin(sourceIndex);  
 }
- 
+
 bool Socket::FileDownload_Start(const char* fileName) {
   if(FileDownload_CheckActive())
     return false;
@@ -669,7 +675,10 @@ bool Socket::FileDownload_Start(const char* fileName) {
   (*fileDLSources[0].formatQuery)(dl.query, sizeof(dl.query), fileName);
   if(FileDownload_StartImpl(fileName, 0, false, true))
     return true;
+
+  return false; //@TODO!
 }
+
 
 bool Socket::FileDownload_CleanUp(bool rename) {
   if(!dl.cleared)
