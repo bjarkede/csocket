@@ -57,8 +57,16 @@ void* AcceptSocket(void* data) {
 
 	    //@TODO: Error when doing it in chunks right now
 	    //for(int i = 0; i < buf.length; i += CHUNK_SIZE) {
-	      write(dl.socket, buf.buffer, buf.length);	
-	      //}	
+	    //write(dl.socket, buf.buffer, buf.length);	
+	    //}	    
+	    for(int i = 0; i < buf.length; i += CHUNK_SIZE) {
+	      if((i + CHUNK_SIZE) > buf.length) {
+		// If we dont do this we write out of memory
+		write(dl.socket, buf.buffer + i, buf.length - i);
+	      } else {
+		write(dl.socket, buf.buffer + i, CHUNK_SIZE);
+	      }
+	    }   
 	  }
 	}
 
