@@ -46,19 +46,17 @@ void* AcceptSocket(void* data) {
       if(strncmp(token, "RETR", strlen(token) - 1) == 0) {
 	token = strtok(NULL, ""); // Get the next token
 	token[strcspn(token, "\n")] = 0;
-	
+
 	memcpy(dl.fileName, token, strlen(token));
 	if(FindLocalFile(&dl)) {
 	  if(ReadEntireFile(buf, dl.tempPath)) {
 
-	    //char fileSize[MAX_PATH];
-	    //snprintf(fileSize, MAX_PATH, "%d", (int)buf.length);
-	    //write(dl.socket, fileSize, MAX_PATH);
-
-	    //@TODO: Error when doing it in chunks right now
-	    //for(int i = 0; i < buf.length; i += CHUNK_SIZE) {
 	    //write(dl.socket, buf.buffer, buf.length);	
-	    //}	    
+
+	    // @NOTE
+	    // The code below is used for chunk based writes
+	    // We do not use this in out project..
+	    
 	    for(int i = 0; i < buf.length; i += CHUNK_SIZE) {
 	      if((i + CHUNK_SIZE) > buf.length) {
 		// If we dont do this we write out of memory
@@ -66,7 +64,8 @@ void* AcceptSocket(void* data) {
 	      } else {
 		write(dl.socket, buf.buffer + i, CHUNK_SIZE);
 	      }
-	    }   
+	    }
+	    
 	  }
 	}
 
@@ -457,7 +456,7 @@ bool FindLocalFile(fileDownload_t* dl) {
 	if(realpath(ent->d_name, dl->tempPath) != NULL) {
 	  printf("%s\n", dl->tempPath);
 	} else {
-	  PrintError(dl, "findlocalfile (%s)", dl->tempPath);
+	  PrintError(dl, "findlocalfile (%d)", dl->tempPath);
 	  return false;
 	}
 #endif
@@ -465,7 +464,7 @@ bool FindLocalFile(fileDownload_t* dl) {
     }
     
   } else {
-    PrintError(dl, "findlocalfile (%s)", dl->tempPath);
+    PrintError(dl, "findlocalfile (%d)", errno);
     return false;
   }
 

@@ -43,7 +43,7 @@ typedef int SOCKET;
 
 #define DEFAULT_PORT "27015"
 #define MAX_TIMEOUT_MS 2000
-#define NUM_THREADS 5
+#define NUM_THREADS 32
 #define MAXPRINTMSG 512
 #define CHUNK_SIZE 1000
 
