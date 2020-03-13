@@ -48,25 +48,28 @@ int main(int argc, char *argv[])
     
 
     FILE* file;
+    file = fopen("./tmp.jpg", "wb");
      
     // Get the message
     printf("Please enter the message (RETR <filename>): ");
     bzero(buffer, sizeof(buffer));
     fgets(buffer, 255, stdin);
-
+      
     // Write it
     n = write(sockfd, buffer, strlen(buffer));
     if(n < 0)
-      error("ERROR writing to the socket.");
+      error("ERROR writing to the socket.");    
     bzero(buffer, sizeof(buffer));
-      
+
+    int prev_write = 0;
+    
     // Read the response
     while(1) {
-      n = recv(sockfd, buffer, sizeof(buffer), 0);
+      n = recv(sockfd, buffer, sizeof(buffer), MSG_DONTWAIT);
       if (n > 0) {	  
-	fwrite(buffer, n, 1, stdout);
-	printf("\n");
-	fflush(stdout);
+	fwrite(buffer, 1, n, file);
+	printf("n is: %d\n", n);
+	//fflush(stdout);
 	bzero(buffer, sizeof(buffer));
       }
     }

@@ -61,7 +61,9 @@ void* AcceptSocket(void* data) {
 	      if((i + CHUNK_SIZE) > buf.length) {
 		// If we dont do this we write out of memory
 		write(dl.socket, buf.buffer + i, buf.length - i);
+		printf("final write: %d\n", buf.length - i);
 	      } else {
+		printf("write: %d, i: %d, size: %d\n", CHUNK_SIZE, i, buf.length);
 		write(dl.socket, buf.buffer + i, CHUNK_SIZE);
 	      }
 	    }
